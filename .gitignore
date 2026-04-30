@@ -30,8 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files (local overrides — never commit real secrets)
+.env
+.env.local
+.env.*.local
+# .env.example is intentionally tracked
 
 # vercel
 .vercel
@@ -39,3 +42,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+AGENTS.md
+plan.mediSchedule.prompt.md
+AGENTS.md
+.github/prompts/plan-medi-schedule.prompt.md
+.github/skills/nextjs-react-starter/SKILL.md
+.make_inspect/ai_chat.json
+.make_inspect/canvas.fig
+.make_inspect/meta.json
+.make_inspect/images/4aa96dcbb39f737fd1e4ac6e8b227c5cd2203335
+.make_inspect/images/b9e9886f56488fc8b14c64e0841d1c6075ea375b
+MediSchedule.make
+.make_inspect/thumbnail.png
