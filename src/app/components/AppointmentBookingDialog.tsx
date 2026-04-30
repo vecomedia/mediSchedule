@@ -4,35 +4,25 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-
 import { Textarea } from "./ui/textarea";
 import type { Patient, Doctor } from "@/lib/types";
+import { type BookingDialogValues } from "@/lib/validations/appointment";
 
 interface AppointmentBookingDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit?: (appointment: AppointmentData) => void;
+  onSubmit?: (appointment: BookingDialogValues) => void;
   patients: Patient[];
   doctors: Doctor[];
 }
 
-export interface AppointmentData {
-  patientId: string;
-  patientName: string;
-  doctorId: string;
-  doctorName: string;
-  date: string;
-  time: string;
-  duration: string;
-  type: string;
-  notes: string;
-}
+export type { BookingDialogValues as AppointmentData };
 
 export default function AppointmentBookingDialog({ open, onClose, onSubmit, patients, doctors }: AppointmentBookingDialogProps) {
   const [step, setStep] = useState(1);
   const [patientSearch, setPatientSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
-  const [formData, setFormData] = useState<AppointmentData>({
+  const [formData, setFormData] = useState<BookingDialogValues>({
     patientId: "",
     patientName: "",
     doctorId: "",
