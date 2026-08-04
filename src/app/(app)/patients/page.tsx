@@ -32,7 +32,7 @@ export default async function PatientsPage({
 	}
 
 	const params = await searchParams;
-	const patients = getPatients(params.search);
+	const patients = await getPatients(params.search);
 
 	return (
 		<div className="space-y-6">

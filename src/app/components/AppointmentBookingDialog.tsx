@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
+import { buildOfficeTimeSlots } from "@/lib/office-hours";
 import type { Patient, Doctor } from "@/lib/types";
 import { type BookingDialogValues } from "@/lib/validations/appointment";
 

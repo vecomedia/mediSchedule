@@ -1,10 +1,21 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import Calendar from "@/app/components/Calendar";
+import CalendarClient from "@/app/components/calendar/calendar-client";
 import { getAppointments, getDoctors, getPatients } from "@/lib/data";
+import type { AppointmentStatus } from "@/lib/types";
 
-export default async function CalendarPage() {
+type CalendarSearchParams = {
+	date?: string;
+	status?: AppointmentStatus | "all";
+	view?: "day" | "week";
+};
+
+export default async function CalendarPage({
+	searchParams,
+}: {
+	searchParams: Promise<CalendarSearchParams>;
+}) {
 	const session = await auth();
 
 	if (!session?.user) {
@@ -15,9 +26,22 @@ export default async function CalendarPage() {
 		redirect("/patient-dashboard");
 	}
 
-	const appointments = getAppointments();
-	const doctors = getDoctors();
-	const patients = getPatients();
+	const params = await searchParams;
 
-	return <Calendar appointments={appointments} doctors={doctors} patients={patients} />;
+	const [appointments, doctors, patients] = await Promise.all([
+		getAppointments(),
+		getDoctors(),
+		getPatients(),
+	]);
+
+	return (
+		<CalendarClient
+			appointments={appointments}
+			doctors={doctors}
+			patients={patients}
+			initialDate={params.date}
+			initialStatus={params.status}
+			initialView={params.view}
+		/>
+	);
 }

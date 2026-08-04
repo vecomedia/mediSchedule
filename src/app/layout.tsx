@@ -18,18 +18,27 @@ export const metadata: Metadata = {
   description: "Healthcare scheduling learning app built with Next.js and React.",
 };
 
+function getAuthBasePath(): string {
+  const rawBasePath = (process.env.NEXT_BASE_PATH ?? "").trim();
+  const appBasePath = rawBasePath === "" ? "" : rawBasePath.replace(/\/$/, "");
+
+  return appBasePath === "" ? "/api/auth" : `${appBasePath}/api/auth`;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const authBasePath = getAuthBasePath();
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-slate-50 text-slate-950 flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers authBasePath={authBasePath}>{children}</Providers>
       </body>
     </html>
   );

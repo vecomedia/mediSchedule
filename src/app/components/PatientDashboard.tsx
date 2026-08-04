@@ -2,12 +2,16 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Calendar, Clock, User, LogOut, Plus } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { AppointmentDetailsDialog } from "./AppointmentDetailsDialog";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import PatientBookingDialog from "./PatientBookingDialog";
-import type { AppointmentDetails } from "@/lib/types";
+import PatientBookingDialog, { type AppointmentData } from "./PatientBookingDialog";
+import type { CalendarAppointment } from "./calendar/calendar-utils";
+import type { AppointmentDetails, AppointmentStatus, Doctor } from "@/lib/types";
+import { toISOWithOffset } from "@/lib/office-hours";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -27,14 +31,220 @@ function formatTime(value: string) {
 
 type PatientDashboardProps = {
   appointments: AppointmentDetails[];
+  doctors: Doctor[];
 };
 
-export default function PatientDashboard({ appointments }: PatientDashboardProps) {
+function isUpcomingAppointment(appointment: AppointmentDetails) {
+  const startsAt = new Date(`${appointment.date}T${appointment.time}:00`);
+  return startsAt >= new Date();
+}
+
+function toCalendarAppointment(appointment: AppointmentDetails): CalendarAppointment {
+  const startAt = new Date(`${appointment.date}T${appointment.time}:00`);
+  const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
+
+  return {
+    ...appointment,
+    startAt,
+    endAt,
+    dayKey: appointment.date,
+    startSlot: 0,
+    endSlot: 1,
+    overlapIndex: 0,
+    overlapCount: 1,
+    displayStartTime: formatTime(appointment.time),
+    displayEndTime: endAt.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
+}
+
+export default function PatientDashboard({ appointments, doctors }: PatientDashboardProps) {
+  const router = useRouter();
   const { data: session } = useSession();
   const user = session?.user;
+  const visibleAppointments = appointments.filter((appointment) => appointment.status !== "cancelled");
+  const upcomingAppointments = visibleAppointments; // Show ALL appointments, not just future ones
+  const futureAppointments = visibleAppointments.filter(isUpcomingAppointment);
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [deletingAppointmentId, setDeletingAppointmentId] = useState<string | null>(null);
+  const [appointmentDetailsOpen, setAppointmentDetailsOpen] = useState(false);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+  const [reschedulingAppointmentId, setReschedulingAppointmentId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+  const [updatingAppointmentId, setUpdatingAppointmentId] = useState<string | null>(null);
 
-  const upcomingAppointment = appointments[0] ?? null;
+  const upcomingAppointment = upcomingAppointments[0] ?? null;
+  const selectedAppointment = upcomingAppointments.find((entry) => entry.id === selectedAppointmentId) ?? null;
+  const selectedCalendarAppointment = selectedAppointment
+    ? toCalendarAppointment(selectedAppointment)
+    : null;
+
+  function openDetails(appointmentId: string) {
+    setSelectedAppointmentId(appointmentId);
+    setReschedulingAppointmentId(null);
+    setRescheduleError(null);
+    setAppointmentDetailsOpen(true);
+  }
+
+  function openReschedule(appointmentId: string) {
+    const appointment = upcomingAppointments.find((entry) => entry.id === appointmentId);
+    if (!appointment) {
+      return;
+    }
+
+    setSelectedAppointmentId(appointmentId);
+    setAppointmentDetailsOpen(true);
+    setReschedulingAppointmentId(appointmentId);
+    setRescheduleDate(appointment.date);
+    setRescheduleTime(appointment.time);
+    setRescheduleError(null);
+  }
+
+  async function handleStatusChange(appointmentId: string, nextStatus: AppointmentStatus) {
+    setUpdatingAppointmentId(appointmentId);
+    setRescheduleError(null);
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: nextStatus === "confirmed" ? "CONFIRMED" : "CANCELLED",
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error ?? "Unable to update appointment status.");
+      }
+
+      if (nextStatus === "cancelled") {
+        setAppointmentDetailsOpen(false);
+        setSelectedAppointmentId(null);
+      }
+
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to update appointment status.");
+    } finally {
+      setUpdatingAppointmentId(null);
+    }
+  }
+
+  async function handleRescheduleSave(appointmentId: string) {
+    if (!rescheduleDate || !rescheduleTime) {
+      setRescheduleError("Please select a date and time.");
+      return;
+    }
+
+    setUpdatingAppointmentId(appointmentId);
+    setRescheduleError(null);
+
+    try {
+      const startAt = new Date(`${rescheduleDate}T${rescheduleTime}:00`);
+      const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
+
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "reschedule",
+          startAt: toISOWithOffset(startAt),
+          endAt: toISOWithOffset(endAt),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error ?? "Unable to reschedule appointment.");
+      }
+
+      setReschedulingAppointmentId(null);
+      setAppointmentDetailsOpen(false);
+      setSelectedAppointmentId(null);
+      router.refresh();
+    } catch (error) {
+      setRescheduleError(error instanceof Error ? error.message : "Unable to reschedule appointment.");
+    } finally {
+      setUpdatingAppointmentId(null);
+    }
+  }
+
+  async function handleDeleteAppointment(appointmentId: string) {
+    const shouldDelete = window.confirm("Delete this appointment?");
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingAppointmentId(appointmentId);
+
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error ?? "Unable to delete appointment.");
+      }
+
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to delete appointment.");
+    } finally {
+      setDeletingAppointmentId(null);
+    }
+  }
+
+  async function handleCreateAppointment(appointment: AppointmentData) {
+    if (!user?.id) {
+      throw new Error("You need to be logged in to create an appointment.");
+    }
+
+    const startAt = new Date(`${appointment.date}T${appointment.time}:00`);
+    const endAt = new Date(startAt.getTime() + Number(appointment.duration) * 60 * 1000);
+
+    const response = await fetch("/api/appointments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        patientId: user.id,
+        doctorId: appointment.doctorId,
+        startAt: toISOWithOffset(startAt),
+        endAt: toISOWithOffset(endAt),
+        type: appointment.type,
+        reason: appointment.reason,
+        notes: appointment.notes.trim() || undefined,
+        status: "PENDING",
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(payload?.error ?? "Unable to save appointment.");
+    }
+
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -85,7 +295,7 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
                 <div>
                   <p className="text-sm text-slate-600 mb-1">Upcoming</p>
                   <p className="text-3xl font-semibold text-slate-900">
-                    {appointments.filter((a) => a.status === "confirmed").length}
+                    {upcomingAppointments.filter((a) => a.status === "confirmed").length}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -101,7 +311,7 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
                 <div>
                   <p className="text-sm text-slate-600 mb-1">Pending</p>
                   <p className="text-3xl font-semibold text-slate-900">
-                    {appointments.filter((a) => a.status === "pending").length}
+                    {upcomingAppointments.filter((a) => a.status === "pending").length}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center">
@@ -115,7 +325,7 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
             <CardContent className="p-6">
               <p className="text-sm text-blue-100 mb-3">Need to see a doctor?</p>
               <Button
-                className="w-full text-blue-700 hover:bg-blue-50"
+                className="w-full text-white-700 hover:bg-blue-50 hover:text-blue-700"
                 onClick={() => setBookingDialogOpen(true)}
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -150,13 +360,26 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
                 <p className="text-sm text-slate-500">{upcomingAppointment.doctor.specialty}</p>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="outline" className="flex-1">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => openReschedule(upcomingAppointment.id)}
+                  disabled={updatingAppointmentId === upcomingAppointment.id}
+                >
                   Reschedule
                 </Button>
-                <Button variant="outline" className="flex-1">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleDeleteAppointment(upcomingAppointment.id)}
+                  disabled={deletingAppointmentId === upcomingAppointment.id}
+                >
                   Cancel
                 </Button>
-                <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => openDetails(upcomingAppointment.id)}
+                >
                   View Details
                 </Button>
               </div>
@@ -175,9 +398,9 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {appointments.length === 0 ? (
+              {upcomingAppointments.length === 0 ? (
                 <p className="text-slate-500 text-sm py-4">No appointments found.</p>
-              ) : appointments.map((apt) => (
+              ) : upcomingAppointments.map((apt) => (
                 <div
                   key={apt.id}
                   className="p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
@@ -210,9 +433,22 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
                         </div>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">
-                      Details
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {apt.status !== "cancelled" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          onClick={() => handleDeleteAppointment(apt.id)}
+                          disabled={deletingAppointmentId === apt.id}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => openDetails(apt.id)}>
+                        Details
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -227,6 +463,37 @@ export default function PatientDashboard({ appointments }: PatientDashboardProps
         onClose={() => setBookingDialogOpen(false)}
         patientId={user?.id || ""}
         patientName={user?.name || ""}
+        doctors={doctors}
+        onSubmit={handleCreateAppointment}
+      />
+
+      <AppointmentDetailsDialog
+        open={appointmentDetailsOpen}
+        onOpenChange={(open) => {
+          setAppointmentDetailsOpen(open);
+          if (!open) {
+            setSelectedAppointmentId(null);
+            setReschedulingAppointmentId(null);
+            setRescheduleError(null);
+          }
+        }}
+        appointment={selectedCalendarAppointment}
+        showConfirmAction={false}
+        reschedulingAppointmentId={reschedulingAppointmentId}
+        rescheduleDate={rescheduleDate}
+        rescheduleTime={rescheduleTime}
+        rescheduleError={rescheduleError}
+        updatingAppointmentId={updatingAppointmentId}
+        onStatusChange={handleStatusChange}
+        onRescheduleClick={() => {
+          if (selectedCalendarAppointment) {
+            openReschedule(selectedCalendarAppointment.id);
+          }
+        }}
+        onRescheduleClose={() => setReschedulingAppointmentId(null)}
+        onRescheduleDateChange={setRescheduleDate}
+        onRescheduleTimeChange={setRescheduleTime}
+        onRescheduleSave={handleRescheduleSave}
       />
     </div>
   );

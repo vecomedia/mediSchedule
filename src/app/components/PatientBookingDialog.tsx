@@ -5,13 +5,16 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Textarea } from "./ui/textarea";
+import { buildOfficeTimeSlots } from "@/lib/office-hours";
+import type { Doctor } from "@/lib/types";
 
 interface PatientBookingDialogProps {
   open: boolean;
   onClose: () => void;
   patientId: string;
   patientName: string;
-  onSubmit?: (appointment: AppointmentData) => void;
+  doctors: Doctor[];
+  onSubmit?: (appointment: AppointmentData) => Promise<void>;
 }
 
 export interface AppointmentData {
@@ -23,6 +26,7 @@ export interface AppointmentData {
   time: string;
   duration: string;
   type: string;
+  reason: string;
   notes: string;
 }
 
@@ -31,9 +35,12 @@ export default function PatientBookingDialog({
   onClose,
   patientId,
   patientName,
+  doctors,
   onSubmit,
 }: PatientBookingDialogProps) {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState<AppointmentData>({
     patientId,
     patientName,
@@ -43,15 +50,9 @@ export default function PatientBookingDialog({
     time: "",
     duration: "30",
     type: "",
+    reason: "",
     notes: "",
   });
-
-  const doctors = [
-    { id: "D-001", name: "Dr. Sarah Smith", specialty: "General Practice", avatar: "SS" },
-    { id: "D-002", name: "Dr. John Williams", specialty: "Cardiology", avatar: "JW" },
-    { id: "D-003", name: "Dr. Emily Chen", specialty: "Pediatrics", avatar: "EC" },
-    { id: "D-004", name: "Dr. Michael Brown", specialty: "Orthopedics", avatar: "MB" },
-  ];
 
   const appointmentTypes = [
     { value: "checkup", label: "General Checkup", duration: "30", icon: "🩺" },
@@ -76,6 +77,7 @@ export default function PatientBookingDialog({
       ...formData,
       type: type.label,
       duration: type.duration,
+      reason: type.label,
     });
     setStep(3);
   };
@@ -94,38 +96,47 @@ export default function PatientBookingDialog({
     return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
-  const timeSlots = [
-    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-    "16:00", "16:30", "17:00", "17:30"
-  ];
+  const timeSlots = buildOfficeTimeSlots();
 
-  const handleSubmit = () => {
-    console.log("Booking appointment:", formData);
-
-    if (onSubmit) {
-      onSubmit(formData);
+  const handleSubmit = async () => {
+    if (!formData.reason.trim()) {
+      setSubmitError("Please provide a reason for the appointment.");
+      return;
     }
 
-    alert(`Appointment request submitted!\n\nDoctor: ${formData.doctorName}\nType: ${formData.type}\nDate: ${new Date(formData.date).toLocaleDateString()}\nTime: ${formData.time}\n\nYou will receive a confirmation email shortly.`);
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-    setFormData({
-      patientId,
-      patientName,
-      doctorId: "",
-      doctorName: "",
-      date: "",
-      time: "",
-      duration: "30",
-      type: "",
-      notes: "",
-    });
-    setStep(1);
-    onClose();
+    try {
+      if (onSubmit) {
+        await onSubmit(formData);
+      }
+
+      setFormData({
+        patientId,
+        patientName,
+        doctorId: "",
+        doctorName: "",
+        date: "",
+        time: "",
+        duration: "30",
+        type: "",
+        reason: "",
+        notes: "",
+      });
+      setStep(1);
+      onClose();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to request appointment.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetDialog = () => {
     setStep(1);
+    setSubmitError(null);
+    setIsSubmitting(false);
     setFormData({
       patientId,
       patientName,
@@ -135,6 +146,7 @@ export default function PatientBookingDialog({
       time: "",
       duration: "30",
       type: "",
+      reason: "",
       notes: "",
     });
     onClose();
@@ -181,7 +193,7 @@ export default function PatientBookingDialog({
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                      <span className="font-semibold text-white">{doctor.avatar}</span>
+                      <span className="font-semibold text-white">{doctor.name.slice(0, 2).toUpperCase()}</span>
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-slate-900">{doctor.name}</p>
@@ -276,7 +288,7 @@ export default function PatientBookingDialog({
                         setFormData({ ...formData, time });
                         setStep(4);
                       }}
-                      className="p-2 border-2 border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium"
+                      className="text-slate-900 p-2 border-2 border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium"
                     >
                       {time}
                     </button>
@@ -334,13 +346,31 @@ export default function PatientBookingDialog({
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="reason">Reason for Visit</Label>
+              <Input
+                id="reason"
+                placeholder="Short reason for this appointment"
+                value={formData.reason}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+              />
+            </div>
+
+            {submitError ? (
+              <p className="text-sm text-red-600">{submitError}</p>
+            ) : null}
+
             {/* Actions */}
             <div className="flex gap-3 pt-4">
               <Button type="button" variant="outline" onClick={resetDialog} className="flex-1">
                 Cancel
               </Button>
-              <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
-                Request Appointment
+              <Button
+                onClick={handleSubmit}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Saving..." : "Request Appointment"}
               </Button>
             </div>
           </div>

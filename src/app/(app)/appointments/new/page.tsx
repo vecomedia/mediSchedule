@@ -16,8 +16,7 @@ export default async function NewAppointmentPage() {
 		redirect("/patient-dashboard");
 	}
 
-	const doctors = getDoctors();
-	const patients = getPatients();
+	const [doctors, patients] = await Promise.all([getDoctors(), getPatients()]);
 
 	return (
 		<Card>

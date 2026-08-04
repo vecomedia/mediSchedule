@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { auth } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/app/components/ui/card";
 import { StatusBadge } from "@/app/components/ui/status-badge";
 import StaffBookingDialog from "@/app/components/StaffBookingDialog";
+import { AppointmentActionButtons } from "@/app/components/appointment-action-buttons";
 import { getAppointments, getDoctors, getPatients } from "@/lib/data";
 import type { AppointmentStatus } from "@/lib/types";
 
@@ -28,12 +30,29 @@ export default async function AppointmentsPage({
 	}
 
 	const params = await searchParams;
-	const doctors = getDoctors();
-	const patients = getPatients();
-	const appointments = getAppointments({
-		date: params.date,
-		status: params.status,
-	});
+	const [doctors, patients, appointments] = await Promise.all([
+		getDoctors(),
+		getPatients(),
+		getAppointments({
+			date: params.date,
+			status: params.status,
+		}),
+	]);
+
+	const calendarSearchParams = new URLSearchParams();
+
+	if (params.date) {
+		calendarSearchParams.set("date", params.date);
+		calendarSearchParams.set("view", "day");
+	}
+
+	if (params.status && params.status !== "all") {
+		calendarSearchParams.set("status", params.status);
+	}
+
+	const calendarHref = calendarSearchParams.size
+		? `/calendar?${calendarSearchParams.toString()}`
+		: "/calendar";
 
 	return (
 		<div className="space-y-6">
@@ -43,7 +62,15 @@ export default async function AppointmentsPage({
 						<CardTitle>Appointments</CardTitle>
 						<CardDescription>Filter the deterministic schedule by date or workflow status.</CardDescription>
 					</div>
-					<StaffBookingDialog patients={patients} doctors={doctors} />
+					<div className="flex items-center gap-2">
+						<Link
+							href={calendarHref}
+							className="inline-flex h-10 items-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+						>
+							Open in calendar
+						</Link>
+						<StaffBookingDialog patients={patients} doctors={doctors} />
+					</div>
 				</CardHeader>
 				<CardContent>
 					<form className="grid gap-4 rounded-2xl bg-slate-50 p-4 md:grid-cols-[1fr_220px_auto]">
@@ -87,6 +114,8 @@ export default async function AppointmentsPage({
 									<th className="px-6 py-4 font-medium">Date</th>
 									<th className="px-6 py-4 font-medium">Reason</th>
 									<th className="px-6 py-4 font-medium">Status</th>
+									<th className="px-6 py-4 font-medium">Actions</th>
+									<th className="px-6 py-4 font-medium">Calendar</th>
 								</tr>
 							</thead>
 							<tbody className="divide-y divide-slate-100 bg-white">
@@ -97,6 +126,20 @@ export default async function AppointmentsPage({
 										<td className="px-6 py-4 text-slate-600">{appointment.date} at {appointment.time}</td>
 										<td className="px-6 py-4 text-slate-600">{appointment.reason}</td>
 										<td className="px-6 py-4"><StatusBadge status={appointment.status} /></td>
+										<td className="px-6 py-4">
+											<AppointmentActionButtons
+												appointmentId={appointment.id}
+												currentStatus={appointment.status}
+											/>
+										</td>
+										<td className="px-6 py-4">
+											<Link
+												href={`/calendar?date=${appointment.date}&status=${appointment.status}&view=day`}
+												className="text-sm font-medium text-blue-700 hover:text-blue-800"
+											>
+												View
+											</Link>
+										</td>
 									</tr>
 								))}
 							</tbody>

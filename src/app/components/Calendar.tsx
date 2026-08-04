@@ -97,7 +97,7 @@ function mapAppointmentsToWeek(
       return {
         id: appointment.id,
         patient: appointment.patient.name,
-        type: appointment.reason,
+        type: appointment.type,
         date: appointment.date,
         startTime: formatDisplayTime(appointment.time),
         endTime: end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),

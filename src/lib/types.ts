@@ -1,43 +1,25 @@
-export type PatientStatus = "active" | "new" | "inactive";
+import { z } from "zod";
 
-export interface Patient {
-	id: string;
-	name: string;
-	dob: string;
-	email: string;
-	phone: string;
-	status: PatientStatus;
-}
+import {
+	appointmentDetailsSchema,
+	appointmentSchema,
+	appointmentStatusSchema,
+	authUserSchema,
+	doctorSchema,
+	patientSchema,
+	patientStatusSchema,
+	userRoleSchema,
+} from "@/lib/schemas/domain";
 
-export interface Doctor {
-	id: string;
-	name: string;
-	specialty: string;
-	avatar: string;
-}
+export type PatientStatus = z.infer<typeof patientStatusSchema>;
+export type Patient = z.infer<typeof patientSchema>;
 
-export type AppointmentStatus = "confirmed" | "pending" | "cancelled";
+export type Doctor = z.infer<typeof doctorSchema>;
 
-export interface Appointment {
-	id: string;
-	patientId: string;
-	doctorId: string;
-	date: string;
-	time: string;
-	status: AppointmentStatus;
-	reason: string;
-}
+export type AppointmentStatus = z.infer<typeof appointmentStatusSchema>;
+export type Appointment = z.infer<typeof appointmentSchema>;
 
-export type UserRole = "admin" | "staff" | "doctor" | "patient" | "receptionist";
+export type UserRole = z.infer<typeof userRoleSchema>;
+export type AuthUser = z.infer<typeof authUserSchema>;
 
-export interface AuthUser {
-	id: string;
-	email: string;
-	name: string;
-	role: UserRole;
-}
-
-export interface AppointmentDetails extends Appointment {
-	patient: Patient;
-	doctor: Doctor;
-}
+export type AppointmentDetails = z.infer<typeof appointmentDetailsSchema>;
