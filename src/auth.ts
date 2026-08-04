@@ -1,4 +1,8 @@
+import type { NextAuthOptions } from "next-auth";
+import { getServerSession } from "next-auth";
+
 import NextAuth from "next-auth";
+
 import Credentials from "next-auth/providers/credentials";
 
 import { loginSchema } from "@/lib/validations/auth";
