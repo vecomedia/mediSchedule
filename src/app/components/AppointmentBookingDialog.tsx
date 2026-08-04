@@ -21,6 +21,8 @@ export type { BookingDialogValues as AppointmentData };
 
 export default function AppointmentBookingDialog({ open, onClose, onSubmit, patients, doctors }: AppointmentBookingDialogProps) {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [patientSearch, setPatientSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
   const [formData, setFormData] = useState<BookingDialogValues>({
@@ -30,7 +32,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
     doctorName: "",
     date: "",
     time: "",
-    duration: "30",
+    duration: "15",
     type: "",
     notes: "",
   });
@@ -99,44 +101,44 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
     return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
-  const timeSlots = [
-    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-    "16:00", "16:30", "17:00", "17:30"
-  ];
+  const timeSlots = buildOfficeTimeSlots();
 
-  const handleSubmit = () => {
-    // Mock success - in real app, this would send to your backend
-    console.log("Booking appointment:", formData);
+  const handleSubmit = async () => {
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-    if (onSubmit) {
-      onSubmit(formData);
+    try {
+      if (onSubmit) {
+        await onSubmit(formData);
+      }
+
+      setFormData({
+        patientId: "",
+        patientName: "",
+        doctorId: "",
+        doctorName: "",
+        date: "",
+        time: "",
+        duration: "30",
+        type: "",
+        notes: "",
+      });
+      setStep(1);
+      setPatientSearch("");
+      setDoctorSearch("");
+
+      onClose();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Unable to schedule appointment.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Show success message (you could use a toast notification here)
-    alert(`Appointment scheduled!\n\nPatient: ${formData.patientName}\nDoctor: ${formData.doctorName}\nDate: ${new Date(formData.date).toLocaleDateString()}\nTime: ${formData.time}`);
-
-    // Reset form
-    setFormData({
-      patientId: "",
-      patientName: "",
-      doctorId: "",
-      doctorName: "",
-      date: "",
-      time: "",
-      duration: "30",
-      type: "",
-      notes: "",
-    });
-    setStep(1);
-    setPatientSearch("");
-    setDoctorSearch("");
-
-    onClose();
   };
 
   const resetDialog = () => {
     setStep(1);
+    setSubmitError(null);
+    setIsSubmitting(false);
     setPatientSearch("");
     setDoctorSearch("");
     setFormData({
@@ -221,6 +223,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
               {filteredPatients.length === 0 && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
                   No patients found for &ldquo;{patientSearch}&rdquo;.
+                  No patients found for &quot;{patientSearch}&quot;.
                 </div>
               )}
             </div>
@@ -270,6 +273,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
               {filteredDoctors.length === 0 && (
                 <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
                   No doctors found for &ldquo;{doctorSearch}&rdquo;.
+                  No doctors found for &quot;{doctorSearch}&quot;.
                 </div>
               )}
             </div>
@@ -358,7 +362,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
                         setFormData({ ...formData, time });
                         setStep(5);
                       }}
-                      className="p-2 border-2 border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium"
+                      className="p-2 border-2 text-slate-900 border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-sm font-medium"
                     >
                       {time}
                     </button>
@@ -376,25 +380,31 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
               ← Back to Date/Time
             </Button>
 
+            {submitError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {submitError}
+              </div>
+            ) : null}
+
             {/* Summary */}
             <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
               <p className="text-sm font-medium text-blue-900 mb-3">Appointment Summary</p>
               <div className="space-y-2 text-sm text-blue-800">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 ">
                   <User className="w-4 h-4" />
-                  <span><strong>Patient:</strong> {formData.patientName}</span>
+                  <span className="text-slate-900"><strong>Patient:</strong> {formData.patientName}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Stethoscope className="w-4 h-4" />
-                  <span><strong>Doctor:</strong> {formData.doctorName}</span>
+                  <span className="text-slate-900"><strong>Doctor:</strong> {formData.doctorName}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
-                  <span><strong>Type:</strong> {formData.type} ({formData.duration} min)</span>
+                  <span  className="text-slate-900" ><strong>Type:</strong> {formData.type} ({formData.duration} min)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CalendarIcon className="w-4 h-4" />
-                  <span><strong>Date:</strong> {new Date(formData.date).toLocaleDateString("en-US", {
+                  <span className="text-slate-900"><strong>Date:</strong> {new Date(formData.date).toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",
                     day: "numeric",
@@ -422,11 +432,11 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
 
             {/* Actions */}
             <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={resetDialog} className="flex-1">
+              <Button type="button" variant="outline" onClick={resetDialog} className="flex-1" disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
-                Confirm & Schedule
+              <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
+                {isSubmitting ? "Scheduling..." : "Confirm & Schedule"}
               </Button>
             </div>
           </div>

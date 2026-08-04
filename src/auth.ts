@@ -55,7 +55,6 @@ if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
 	secret: process.env.AUTH_SECRET ?? "medi-schedule-dev-secret",
-	trustHost: process.env.AUTH_TRUST_HOST === "true" || process.env.NODE_ENV !== "production",
 	pages: {
 		signIn: "/login",
 	},
