@@ -1,8 +1,24 @@
-import NextAuth from "next-auth";
+import type { NextAuthOptions } from "next-auth";
+import { getServerSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
 import { loginSchema } from "@/lib/validations/auth";
 import type { AuthUser, UserRole } from "@/lib/types";
+
+const rawBasePath = (process.env.NEXT_BASE_PATH ?? "").trim();
+const appBasePath = rawBasePath === "" ? "" : rawBasePath.replace(/\/$/, "");
+
+function withBasePath(path: string): string {
+	if (appBasePath === "") {
+		return path;
+	}
+
+	return `${appBasePath}${path}`;
+}
+
+if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV !== "production") {
+	process.env.NEXTAUTH_URL = `http://localhost:3000${appBasePath}`;
+}
 
 const testUsers: Array<AuthUser & { password: string }> = [
 	{
@@ -49,11 +65,10 @@ function getUserRole(role: unknown): UserRole {
 	return "staff";
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authOptions: NextAuthOptions = {
 	secret: process.env.AUTH_SECRET ?? "medi-schedule-dev-secret",
-	trustHost: process.env.AUTH_TRUST_HOST === "true" || process.env.NODE_ENV !== "production",
 	pages: {
-		signIn: "/login",
+		signIn: withBasePath("/login"),
 	},
 	session: {
 		strategy: "jwt",
@@ -107,4 +122,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 			return session;
 		},
 	},
-});
+};
+
+export function auth() {
+	return getServerSession(authOptions);
+}
