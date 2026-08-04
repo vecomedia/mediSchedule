@@ -16,9 +16,6 @@ function withBasePath(path: string): string {
 	return `${appBasePath}${path}`;
 }
 
-if (!process.env.NEXTAUTH_URL && process.env.NODE_ENV !== "production") {
-	process.env.NEXTAUTH_URL = `http://localhost:3000${appBasePath}`;
-}
 
 const testUsers: Array<AuthUser & { password: string }> = [
 	{
@@ -66,7 +63,7 @@ function getUserRole(role: unknown): UserRole {
 }
 
 export const authOptions: NextAuthOptions = {
-	secret: process.env.AUTH_SECRET ?? "medi-schedule-dev-secret",
+	secret: process.env.AUTH_SECRET,
 	pages: {
 		signIn: withBasePath("/login"),
 	},
