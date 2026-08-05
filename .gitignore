@@ -56,3 +56,4 @@ AGENTS.md
 MediSchedule.make
 .make_inspect/thumbnail.png
 .env*
+vercel-logs.txt

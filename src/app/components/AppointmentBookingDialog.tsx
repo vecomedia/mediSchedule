@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Textarea } from "./ui/textarea";
 import { buildOfficeTimeSlots } from "@/lib/office-hours";
 import type { Patient, Doctor } from "@/lib/types";
-import { type BookingDialogValues } from "@/lib/validations/appointment";
+import { BookingDialogValues } from "@/lib/validations/appointment";
 
 interface AppointmentBookingDialogProps {
   open: boolean;
@@ -17,7 +17,17 @@ interface AppointmentBookingDialogProps {
   doctors: Doctor[];
 }
 
-export type { BookingDialogValues as AppointmentData };
+export interface AppointmentData {
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  date: string;
+  time: string;
+  duration: string;
+  type: string;
+  notes: string;
+}
 
 export default function AppointmentBookingDialog({ open, onClose, onSubmit, patients, doctors }: AppointmentBookingDialogProps) {
   const [step, setStep] = useState(1);
@@ -25,21 +35,21 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [patientSearch, setPatientSearch] = useState("");
   const [doctorSearch, setDoctorSearch] = useState("");
-  const [formData, setFormData] = useState<BookingDialogValues>({
+  const [formData, setFormData] = useState<AppointmentData>({
     patientId: "",
     patientName: "",
     doctorId: "",
     doctorName: "",
     date: "",
     time: "",
-    duration: "15",
+    duration: "30",
     type: "",
     notes: "",
   });
 
   const appointmentTypes = [
     { value: "checkup", label: "General Checkup", duration: "30", icon: "🩺" },
-    { value: "followup", label: "Follow-up Visit", duration: "20", icon: "🔄" },
+    { value: "followup", label: "Follow-up Visit", duration: "15", icon: "🔄" },
     { value: "consultation", label: "Consultation", duration: "45", icon: "💬" },
     { value: "physical", label: "Annual Physical", duration: "60", icon: "📋" },
     { value: "lab", label: "Lab Results", duration: "15", icon: "🧪" },
@@ -98,7 +108,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
     if (daysFromNow === 1) return "Tomorrow";
     const date = new Date();
     date.setDate(date.getDate() + daysFromNow);
-    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return date.toLocaleDateString("de-DE", { weekday: "short", month: "short", day: "numeric" });
   };
 
   const timeSlots = buildOfficeTimeSlots();
@@ -112,22 +122,27 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
         await onSubmit(formData);
       }
 
-      setFormData({
-        patientId: "",
-        patientName: "",
-        doctorId: "",
-        doctorName: "",
-        date: "",
-        time: "",
-        duration: "30",
-        type: "",
-        notes: "",
-      });
-      setStep(1);
-      setPatientSearch("");
-      setDoctorSearch("");
 
-      onClose();
+    // Show success message (you could use a toast notification here)
+    //alert(`Appointment scheduled!\n\nPatient: ${formData.patientName}\nDoctor: ${formData.doctorName}\nDate: ${new Date(formData.date).toLocaleDateString()}\nTime: ${formData.time}`);
+
+    // Reset form
+    setFormData({
+      patientId: "",
+      patientName: "",
+      doctorId: "",
+      doctorName: "",
+      date: "",
+      time: "",
+      duration: "30",
+      type: "",
+      notes: "",
+    });
+    setStep(1);
+    setPatientSearch("");
+    setDoctorSearch("");
+
+    onClose();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Unable to schedule appointment.");
     } finally {
@@ -222,8 +237,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
               ))}
               {filteredPatients.length === 0 && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                  No patients found for &ldquo;{patientSearch}&rdquo;.
-                  No patients found for &quot;{patientSearch}&quot;.
+                  No patients found for "{patientSearch}".
                 </div>
               )}
             </div>
@@ -272,8 +286,7 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
               ))}
               {filteredDoctors.length === 0 && (
                 <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                  No doctors found for &ldquo;{doctorSearch}&rdquo;.
-                  No doctors found for &quot;{doctorSearch}&quot;.
+                  No doctors found for "{doctorSearch}".
                 </div>
               )}
             </div>
@@ -432,11 +445,11 @@ export default function AppointmentBookingDialog({ open, onClose, onSubmit, pati
 
             {/* Actions */}
             <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={resetDialog} className="flex-1" disabled={isSubmitting}>
+              <Button type="button" variant="outline" onClick={resetDialog} className="flex-1">
                 Cancel
               </Button>
-              <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" disabled={isSubmitting}>
-                {isSubmitting ? "Scheduling..." : "Confirm & Schedule"}
+              <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                Confirm & Schedule
               </Button>
             </div>
           </div>

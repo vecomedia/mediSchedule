@@ -1,6 +1,6 @@
 export const OFFICE_START_HOUR = 7;
 export const OFFICE_END_HOUR = 17;
-export const OFFICE_SLOT_MINUTES = 30;
+export const OFFICE_SLOT_MINUTES = 15;
 
 function toMinutes(hour: number, minute: number) {
   return hour * 60 + minute;

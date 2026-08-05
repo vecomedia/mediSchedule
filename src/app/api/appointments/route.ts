@@ -8,6 +8,7 @@ import {
   createAppointment,
 } from "@/lib/server/appointment-service";
 import { createAppointmentSchema } from "@/lib/validations/appointment-api";
+import z from "zod";
 
 function toRole(value: string | undefined) {
   switch (value) {
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "Invalid payload",
-        details: parsed.error.flatten(),
+           details: z.treeifyError(parsed.error),
       },
       { status: 400 },
     );
