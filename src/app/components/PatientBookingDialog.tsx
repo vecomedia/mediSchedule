@@ -56,7 +56,7 @@ export default function PatientBookingDialog({
 
   const appointmentTypes = [
     { value: "checkup", label: "General Checkup", duration: "30", icon: "🩺" },
-    { value: "followup", label: "Follow-up Visit", duration: "20", icon: "🔄" },
+    { value: "followup", label: "Follow-up Visit", duration: "15", icon: "🔄" },
     { value: "consultation", label: "Consultation", duration: "45", icon: "💬" },
     { value: "physical", label: "Annual Physical", duration: "60", icon: "📋" },
     { value: "lab", label: "Lab Results", duration: "15", icon: "🧪" },
