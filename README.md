@@ -50,6 +50,41 @@ openssl rand -base64 32
 ```
 
 ---
+### Database
+
+To start the PostgreSQL database and the medical-scheduler application from the command line, follow these steps:
+
+1. Start the PostgreSQL Database (using Docker)
+Based on your .env configuration (postgresql://postgres:postgres@localhost:5432/medischedule?schema=public), start a PostgreSQL container:
+
+If creating the container for the first time:
+
+docker run --name medischedule-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=medischedule -p 5432:5432 -d postgres:latest
+
+(Note: If port 5432 is already in use by another service on your machine, you can map it to port 5433 with -p 5433:5432 and change the port in your .env file).
+
+If the container already exists and is stopped:
+
+docker start medischedule-postgres
+
+2. Initialize the Database (First-time setup or after changes)
+Navigate to the project directory, apply the Prisma migrations, and seed the initial data:
+
+cd medical-scheduler
+npm run prisma:migrate
+npm run prisma:seed
+
+3. Start the Next.js Application
+From inside the medical-scheduler directory:
+
+For Development (with hot reloading at http://localhost:3000):
+
+npm run dev
+
+For Production (build and start):
+
+npm run build
+npm run start
 
 ## Demo Accounts
 
@@ -110,7 +145,7 @@ src/
 
 ### Next — backend
 
-- [ ] **Add Prisma + PostgreSQL** — replace `src/lib/faker-data.ts` with a real database. The `src/lib/data.ts` query layer is already shaped for a drop-in swap without changing types or pages.
+- [x] **Add Prisma + PostgreSQL** — replace `src/lib/faker-data.ts` with a real database. The `src/lib/data.ts` query layer is already shaped for a drop-in swap without changing types or pages.
 - [ ] **Migrate auth to DB users** — swap the hardcoded `testUsers` array in `src/auth.ts` for a `prisma.user.findUnique()` lookup with `bcrypt` password comparison.
 - [ ] **Add API route handlers** — `GET/POST /api/appointments`, `GET /api/patients`, `GET /api/doctors` for client-side mutation flows.
 - [ ] **Optimistic updates** — use `useOptimistic` for booking/cancellation once mutations hit a real DB.
