@@ -55,3 +55,4 @@ AGENTS.md
 .make_inspect/images/b9e9886f56488fc8b14c64e0841d1c6075ea375b
 MediSchedule.make
 .make_inspect/thumbnail.png
+.env*
