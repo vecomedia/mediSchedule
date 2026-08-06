@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+	"dev:db": "docker start medischedule-postgres && npm run dev",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",

@@ -27,6 +27,7 @@ Live architecture notes: [/case-study](http://localhost:3000/case-study)
 ```bash
 npm install
 npm run dev
+npm run dev:db
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
