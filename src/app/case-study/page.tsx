@@ -189,7 +189,7 @@ export default function CaseStudyPage() {
 							</div>
 
 							<div className="mt-8 flex flex-wrap gap-2">
-						{["Next.js 16", "React 19", "TypeScript", "NextAuth v5", "Tailwind v4", "Zod", "React Hook Form", "Faker.js"].map(
+						{["Next.js 16", "React 19", "TypeScript", "NextAuth v5", "Tailwind v4", "Zod", "React Hook Form", "Prisma", "PostgreSQL"].map(
 							(t) => <Tag key={t} label={t} />,
 						)}
 							</div>
@@ -207,8 +207,8 @@ export default function CaseStudyPage() {
 								/>
 								<HighlightCard
 									title="Current Stage"
-									value="Learning project"
-									description="The app favors clarity and realistic structure over infrastructure complexity, which is why data is seeded in-memory instead of persisted."
+									value="DB-backed prototype"
+									description="The data layer now runs on PostgreSQL via Prisma. Realistic seed data (patients, doctors, appointments) is generated once with Faker and written to the database, rather than kept in memory."
 								/>
 							</div>
 						</div>
@@ -229,7 +229,7 @@ export default function CaseStudyPage() {
 								points={[
 									"Why the app uses route groups, Server Components, and local state instead of heavier global abstractions.",
 									"How the component model separates reusable UI primitives from feature-level behavior.",
-									"Which trade-offs were consciously accepted to keep the project lightweight and fast to run.",
+									"Which trade-offs were consciously accepted to keep the project lightweight and fast to run, and which of those trade-offs have since been resolved (like moving off in-memory data).",
 								]}
 							/>
 							
@@ -245,9 +245,11 @@ export default function CaseStudyPage() {
 						UI primitives and feature components.
 								</P>
 								<P>
-						The app is intentionally not backed by a real database. All data is seeded via
-						Faker.js at module load time and lives in memory. This keeps the setup frictionless
-						while still allowing realistic pagination, filtering, and relational data queries.
+						The app is now backed by a real PostgreSQL database via Prisma. It started with data
+						seeded entirely in memory using Faker.js, which was deliberate early on — it kept
+						setup frictionless while I focused on UI architecture and auth flows. Faker.js is
+						still used, but now only inside a one-time seed script that populates Postgres with
+						realistic relational data.
 								</P>
 							</Section>
 
@@ -276,11 +278,14 @@ export default function CaseStudyPage() {
     components/       ← feature-level components
       ui/             ← reusable, stateless UI primitives
   lib/
-    data.ts           ← query functions (the "repository" layer)
-    faker-data.ts     ← seeded in-memory data store
+    data.ts           ← query functions (the "repository" layer, now backed by Prisma)
+    prisma.ts         ← Prisma client instance (driver adapter for pg)
     types.ts          ← shared TypeScript interfaces
     utils.ts          ← cn() helper and small utilities
     validations/      ← Zod schemas
+  prisma/
+    schema.prisma     ← database schema
+    seed.ts           ← Faker-generated seed data, written via Prisma
   types/              ← next-auth.d.ts session augmentation
   auth.ts             ← NextAuth config, credential provider`}</pre>
 						</div>
@@ -330,13 +335,15 @@ export default function CaseStudyPage() {
 								<P>
 						There is intentionally no global state manager (no Zustand, no Redux, no Context).
 						The approach is: <strong>server state lives on the server</strong>, client state is
-						local to the component that needs it.
+						local to the component that needs it. Moving the data layer to Postgres didn't change
+						this — it just made "server state" a real database query instead of an in-memory
+						array lookup.
 								</P>
 
 								<div className="grid gap-4 md:grid-cols-2">
 						<Decision
 							choice="Server Components for data fetching"
-							reason="Pages fetch their own data directly via lib/data.ts functions. No useEffect, no loading spinner, no client-side fetch. The data is ready when the HTML arrives. This is the App Router's main advantage and the pattern I most wanted to practice here."
+							reason="Pages fetch their own data directly via lib/data.ts functions, which now call Prisma under the hood. No useEffect, no loading spinner, no client-side fetch. The data is ready when the HTML arrives. This is the App Router's main advantage and the pattern I most wanted to practice here."
 						/>
 						<Decision
 							choice="useState for dialog and form step state"
@@ -349,7 +356,7 @@ export default function CaseStudyPage() {
 						<Decision
 							choice="NextAuth session via useSession / auth()"
 							reason="The user's identity (name, email, role) is the only piece of state that is truly global. NextAuth handles this via a JWT session — useSession() in Client Components, auth() in Server Components. No manual Context was needed."
-							tradeOff="Using the beta NextAuth v5 means some APIs are still shifting. Fine for a learning project, but worth noting."
+							tradeOff="Using the beta NextAuth v5 means some APIs are still shifting. Fine for a learning project, but worth noting. Users are still a hardcoded credentials list rather than rows in the new database — migrating auth to query Postgres directly is the next piece of this puzzle."
 						/>
 					</div>
 							</Section>
@@ -358,7 +365,9 @@ export default function CaseStudyPage() {
 								<P>
 						The app uses NextAuth v5 with a Credentials provider and a hardcoded set of test
 						users. The session stores the user&apos;s role alongside the standard fields via a
-						TypeScript augmentation of <code>next-auth.d.ts</code>.
+						TypeScript augmentation of <code>next-auth.d.ts</code>. Auth hasn&apos;t been migrated
+						to the new database yet — that&apos;s intentionally the next piece of work now that
+						the data layer runs on Postgres.
 								</P>
 								<Subsection title="Role-based routing">
 									<P>
@@ -374,34 +383,41 @@ export default function CaseStudyPage() {
 									<P>
 							The test users need predefined roles. OAuth providers don&apos;t give you a role
 							field out of the box. Credentials let me seed the exact accounts I need for
-							demonstrating each perspective of the app without external dependencies.
+							demonstrating each perspective of the app without external dependencies — and once
+							auth moves to the database, the same provider will simply validate against a
+							<code>prisma.user.findUnique()</code> lookup instead of a hardcoded array.
 									</P>
 								</Subsection>
 							</Section>
 
 							<Section id="data" title="Data Layer" kicker="Implementation Detail">
 								<P>
-						All data is generated once at module load time by Faker.js and stored in module-scope
-						arrays in <code>faker-data.ts</code>. The <code>lib/data.ts</code> file exposes named
-						query functions (<code>getPatients</code>, <code>getAppointments</code>,
-						<code>getDashboardStats</code>, etc.) that filter and sort those arrays — essentially
-						an in-memory repository pattern.
+						Data now lives in PostgreSQL and is accessed through Prisma, using the
+						<code>@prisma/adapter-pg</code> driver adapter over the <code>pg</code> driver. The{" "}
+						<code>lib/data.ts</code> file still exposes the same named query functions it always
+						did (<code>getPatients</code>, <code>getAppointments</code>,{" "}
+						<code>getDashboardStats</code>, etc.) — only their implementation changed, from
+						filtering in-memory arrays to running Prisma queries. Pages and components didn&apos;t
+						need to change at all.
 								</P>
-								<Subsection title="Why not a real database?">
+								<Subsection title="From in-memory to Postgres">
 									<P>
-							The goal was to focus on UI architecture, auth flows, and routing — not database
-							setup. Faker.js gives realistic relational data (appointments have patient and doctor
-							FK references, <code>hydrateAppointment()</code> joins them) without running a
-							server. Swapping this for Drizzle + SQLite or Prisma + Postgres would be a
-							straightforward next step.
+							The project started with data generated once at module load time by Faker.js and
+							stored in module-scope arrays, which was enough to prototype UI architecture, auth
+							flows, and routing without running a server. Once those patterns were solid, the
+							natural next step was swapping that store for a real database — Prisma schema,
+							migrations, and a <code>prisma/seed.ts</code> script that uses Faker.js to generate
+							the same realistic relational data (appointments still reference patient and doctor
+							foreign keys) but writes it into Postgres instead of memory.
 									</P>
 								</Subsection>
 								<Subsection title="AppointmentDetails: join at the data layer">
 									<P>
 							Rather than passing raw IDs to components and looking up names in the template,
 							<code>AppointmentDetails</code> extends <code>Appointment</code> with the full{" "}
-							<code>Patient</code> and <code>Doctor</code> objects. Components receive the
-							complete shape they need and never reach back into the data store.
+							<code>Patient</code> and <code>Doctor</code> objects. With Prisma this join happens
+							via <code>include</code> in the query itself, so components still receive the
+							complete shape they need and never reach back into the data layer.
 									</P>
 								</Subsection>
 							</Section>
@@ -425,6 +441,11 @@ export default function CaseStudyPage() {
 							reason="Zod schemas live in lib/validations/ and are used both server-side (API route handler for tasks) and client-side (React Hook Form resolver). One schema, two uses."
 						/>
 						<Decision
+							choice="Prisma + PostgreSQL with the pg driver adapter"
+							reason="Prisma's schema-first workflow and generated client kept lib/data.ts's function signatures unchanged during the swap from in-memory arrays. The @prisma/adapter-pg driver adapter runs on the standard node-postgres driver rather than Prisma's own query engine binary, which keeps the deployment story simpler."
+							tradeOff="Local development now depends on a running Postgres instance (via Docker) instead of just npm run dev — one more moving part than the in-memory version, in exchange for real persistence and relational integrity."
+						/>
+						<Decision
 							choice="Geist as the app font"
 							reason="Geist (Vercel's open-source font) is optimized for developer-tool UIs and works well with the clinical, data-dense aesthetic I was going for."
 						/>
@@ -441,7 +462,7 @@ export default function CaseStudyPage() {
 										<ul className="space-y-3 text-slate-700 leading-7 list-disc list-inside">
 							<li>
 								Server Components made data-fetching remarkably clean — pages are just async
-								functions that read data and return JSX.
+								functions that read data and return JSX, both before and after the database swap.
 							</li>
 							<li>
 								The two-layer component model (primitives vs. feature components) kept the{" "}
@@ -456,18 +477,28 @@ export default function CaseStudyPage() {
 								Typing the NextAuth session once in <code>next-auth.d.ts</code> paid off
 								everywhere — <code>session.user.role</code> is typed throughout.
 							</li>
+							<li>
+								Shaping <code>lib/data.ts</code> as a repository layer from the start meant
+								replacing Faker&apos;s in-memory arrays with Prisma queries against Postgres
+								required no changes to types, pages, or components — exactly as planned.
+							</li>
 						</ul>
 									</Subsection>
-									<Subsection title="What I would do differently">
+									<Subsection title="What's next">
 										<ul className="space-y-3 text-slate-700 leading-7 list-disc list-inside">
 							<li>
-								Replace the in-memory data store with a proper database — Prisma + PostgreSQL is
-								the planned next step. The <code>lib/data.ts</code> query layer is already
-								shaped for a drop-in swap without touching types or pages.
+								Migrate auth to the database — swap the hardcoded test users in{" "}
+								<code>auth.ts</code> for a <code>prisma.user.findUnique()</code> lookup with
+								hashed password comparison.
 							</li>
 							<li>
-								Add optimistic updates for booking/cancellation flows using React&apos;s new
-								<code>useOptimistic</code> hook — the architecture already supports it.
+								Add API route handlers for client-side mutation flows (
+								<code>POST /api/appointments</code>, etc.) now that there&apos;s a real database
+								to write to.
+							</li>
+							<li>
+								Add optimistic updates for booking/cancellation flows using React&apos;s{" "}
+								<code>useOptimistic</code> hook once those mutation routes exist.
 							</li>
 							<li>
 								Extract the multi-step wizard into a generic hook so it can be reused for other
@@ -512,7 +543,7 @@ export default function CaseStudyPage() {
 								<ul className="space-y-3 text-sm leading-6 text-slate-600">
 									<li>Clear role modeling across multiple user types.</li>
 									<li>Strong separation of page concerns, feature concerns, and UI primitives.</li>
-									<li>Pragmatic trade-offs instead of over-engineered infrastructure.</li>
+									<li>Pragmatic trade-offs, revisited and resolved as the project matured — in-memory data became a real Postgres database once the UI patterns were solid.</li>
 								</ul>
 							</SidebarCard>
 						</div>

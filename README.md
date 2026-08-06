@@ -13,8 +13,9 @@ Live architecture notes: [/case-study](http://localhost:3000/case-study)
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript (strict mode) |
 | Styling | Tailwind CSS v4 |
-| Auth | Auth.js v5 (NextAuth) — Credentials provider, JWT session |
-| Data | Faker.js — seeded in-memory store (no DB yet) |
+| Auth | Auth.js v5 (NextAuth) — Credentials provider, JWT session (hardcoded test users, DB migration pending) |
+| Database | PostgreSQL, accessed via Prisma with the `@prisma/adapter-pg` driver adapter |
+| Seed data | `@faker-js/faker` — used in `prisma/seed.ts` to generate realistic relational data |
 | Validation | Zod + React Hook Form |
 | UI primitives | Hand-rolled (no shadcn/ui) — wraps Radix UI for Select/Tabs/Dialog |
 | Icons | Lucide React |
@@ -24,10 +25,52 @@ Live architecture notes: [/case-study](http://localhost:3000/case-study)
 
 ## Getting Started
 
+### 1. Start PostgreSQL
+
+The app expects a Postgres instance matching your `DATABASE_URL` (e.g. `postgresql://postgres:postgres@localhost:5432/medischedule?schema=public`).
+
+First-time setup with Docker:
+
+```bash
+docker run --name medischedule-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=medischedule \
+  -p 5432:5432 \
+  -d postgres:latest
+```
+
+If port `5432` is already in use, map it to `5433` instead and update `DATABASE_URL` accordingly.
+
+If the container already exists, just start it:
+
+```bash
+docker start medischedule-postgres
+```
+
+Or use the combined dev script, which starts the container and the dev server together:
+
+```bash
+npm run dev:db
+```
+
+### 2. Install dependencies and set up the database
+
 ```bash
 npm install
+```
+
+`npm install` triggers `postinstall`, which runs `prisma generate`. After that, apply migrations and seed the database:
+
+```bash
+npx prisma migrate dev
+npx prisma db seed
+```
+
+### 3. Run the app
+
+```bash
 npm run dev
-npm run dev:db
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
@@ -42,6 +85,7 @@ cp .env.example .env.local
 
 | Variable | Required | Description |
 |---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string used by Prisma. |
 | `AUTH_SECRET` | Production only | Random secret for JWT signing. Dev uses a fallback. |
 | `AUTH_TRUST_HOST` | Optional | Set to `true` on non-Vercel hosts. |
 
@@ -51,45 +95,10 @@ openssl rand -base64 32
 ```
 
 ---
-### Database
-
-To start the PostgreSQL database and the medical-scheduler application from the command line, follow these steps:
-
-1. Start the PostgreSQL Database (using Docker)
-Based on your .env configuration (postgresql://postgres:postgres@localhost:5432/medischedule?schema=public), start a PostgreSQL container:
-
-If creating the container for the first time:
-
-docker run --name medischedule-postgres -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=medischedule -p 5432:5432 -d postgres:latest
-
-(Note: If port 5432 is already in use by another service on your machine, you can map it to port 5433 with -p 5433:5432 and change the port in your .env file).
-
-If the container already exists and is stopped:
-
-docker start medischedule-postgres
-
-2. Initialize the Database (First-time setup or after changes)
-Navigate to the project directory, apply the Prisma migrations, and seed the initial data:
-
-cd medical-scheduler
-npm run prisma:migrate
-npm run prisma:seed
-
-3. Start the Next.js Application
-From inside the medical-scheduler directory:
-
-For Development (with hot reloading at http://localhost:3000):
-
-npm run dev
-
-For Production (build and start):
-
-npm run build
-npm run start
 
 ## Demo Accounts
 
-All accounts use `password123`.
+All accounts use `password123`. These are still hardcoded in `src/auth.ts` — migrating them into the database is the next planned step (see below).
 
 | Role | Email | Access |
 |---|---|---|
@@ -118,13 +127,16 @@ src/
     components/       ← feature-level components
       ui/             ← reusable stateless primitives (Button, Card, Dialog …)
   lib/
-    data.ts           ← repository layer — query functions over the data store
-    faker-data.ts     ← seeded in-memory data (20 patients, 8 doctors, 50 appointments)
+    data.ts           ← repository layer — query functions, now backed by Prisma
+    prisma.ts         ← Prisma client instance (pg driver adapter)
     types.ts          ← shared TypeScript interfaces
     validations/      ← Zod schemas (auth, appointment form, booking dialog)
   types/
     next-auth.d.ts    ← session augmentation — adds id and role to session.user
   auth.ts             ← NextAuth config, CredentialsProvider, JWT callbacks
+prisma/
+  schema.prisma       ← database schema
+  seed.ts             ← Faker-generated seed data (20 patients, 8 doctors, 50 appointments), written via Prisma
 ```
 
 ---
@@ -144,12 +156,16 @@ src/
 - [x] Design system reference page at `/design-system`
 - [x] Architecture case study at `/case-study`
 
-### Next — backend
+### Done — backend
 
-- [x] **Add Prisma + PostgreSQL** — replace `src/lib/faker-data.ts` with a real database. The `src/lib/data.ts` query layer is already shaped for a drop-in swap without changing types or pages.
-- [ ] **Migrate auth to DB users** — swap the hardcoded `testUsers` array in `src/auth.ts` for a `prisma.user.findUnique()` lookup with `bcrypt` password comparison.
+- [x] **Prisma + PostgreSQL** — `src/lib/data.ts` now queries Postgres through Prisma (via `@prisma/adapter-pg`) instead of the old in-memory `faker-data.ts` store. Function signatures didn't change, so pages and components needed no updates.
+- [x] **Seed script** — `prisma/seed.ts` uses `@faker-js/faker` to generate realistic, relationally consistent data (patients, doctors, appointments with FK references) directly into Postgres.
+
+### Next
+
+- [ ] **Migrate auth to DB users** — swap the hardcoded `testUsers` array in `src/auth.ts` for a `prisma.user.findUnique()` lookup with hashed password comparison.
 - [ ] **Add API route handlers** — `GET/POST /api/appointments`, `GET /api/patients`, `GET /api/doctors` for client-side mutation flows.
-- [ ] **Optimistic updates** — use `useOptimistic` for booking/cancellation once mutations hit a real DB.
+- [ ] **Optimistic updates** — use `useOptimistic` for booking/cancellation once mutations hit the database.
 - [ ] **Middleware route protection** — add `src/middleware.ts` as a secondary auth guard in addition to page-level checks.
 - [ ] **End-to-end tests** — Playwright for role-redirect flows.
 
@@ -159,10 +175,14 @@ src/
 
 ```bash
 npm run dev      # start dev server at localhost:3000
-npm run build    # production build
+npm run dev:db   # start the Postgres container, then the dev server
+npm run build    # runs `prisma migrate deploy`, then production build
+npm run start    # start the production server
 npm run lint     # ESLint check
 npx tsc --noEmit # TypeScript check (no output files)
 ```
+
+`postinstall` runs `prisma generate` automatically after `npm install`.
 
 ---
 
