@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-
+import { officeTimeToUtc, utcToOfficeParts } from "@/lib/office-hours";
 import type { AppointmentDetails, Doctor, Patient } from "@/lib/types";
 
 import AppointmentBookingDialog, { type AppointmentData } from "./AppointmentBookingDialog";
 import { Button } from "./ui/button";
-import { toISOWithOffset } from "@/lib/office-hours";
+
 
 type StaffBookingDialogProps = {
   patients: Patient[];
@@ -38,7 +38,7 @@ export default function StaffBookingDialog({
       return;
     }
 
-    const startAt = new Date(`${appointment.date}T${appointment.time}:00`);
+    const startAt = officeTimeToUtc(appointment.date, appointment.time);
     const endAt = new Date(startAt.getTime() + Number(appointment.duration) * 60 * 1000);
 
     const response = await fetch("/api/appointments", {
@@ -49,8 +49,8 @@ export default function StaffBookingDialog({
       body: JSON.stringify({
         patientId: appointment.patientId,
         doctorId: appointment.doctorId,
-        startAt: toISOWithOffset(startAt),
-        endAt: toISOWithOffset(endAt),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         type: appointment.type,
         reason: appointment.notes.trim() || appointment.type,
         notes: appointment.notes.trim() || undefined,
@@ -79,12 +79,13 @@ export default function StaffBookingDialog({
     const doctor = doctors.find((entry) => entry.id === appointment.doctorId);
 
     if (patient && doctor) {
+		const { date, time } = utcToOfficeParts(payload.appointment.startAt);
       onAppointmentCreated?.({
         id: payload.appointment.id,
         patientId: payload.appointment.patientId,
         doctorId: payload.appointment.doctorId,
-        date: payload.appointment.startAt.slice(0, 10),
-        time: payload.appointment.startAt.slice(11, 16),
+       	date,
+		time,
         status: payload.appointment.status.toLowerCase() as AppointmentDetails["status"],
         type: payload.appointment.type,
         reason: payload.appointment.reason,

@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import PatientBookingDialog, { type AppointmentData } from "./PatientBookingDialog";
 import type { CalendarAppointment } from "./calendar/calendar-utils";
 import type { AppointmentDetails, AppointmentStatus, Doctor } from "@/lib/types";
-import { toISOWithOffset } from "@/lib/office-hours";
+import { officeTimeToUtc } from "@/lib/office-hours";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -40,7 +40,7 @@ function isUpcomingAppointment(appointment: AppointmentDetails) {
 }
 
 function toCalendarAppointment(appointment: AppointmentDetails): CalendarAppointment {
-  const startAt = new Date(`${appointment.date}T${appointment.time}:00`);
+  const startAt = officeTimeToUtc(appointment.date, appointment.time);
   const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
 
   return {
@@ -159,8 +159,8 @@ export default function PatientDashboard({ appointments, doctors }: PatientDashb
         },
         body: JSON.stringify({
           mode: "reschedule",
-          startAt: toISOWithOffset(startAt),
-          endAt: toISOWithOffset(endAt),
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
         }),
       });
 
@@ -216,8 +216,10 @@ export default function PatientDashboard({ appointments, doctors }: PatientDashb
       throw new Error("You need to be logged in to create an appointment.");
     }
 
-    const startAt = new Date(`${appointment.date}T${appointment.time}:00`);
+    const startAt = officeTimeToUtc(appointment.date, appointment.time);
     const endAt = new Date(startAt.getTime() + Number(appointment.duration) * 60 * 1000);
+
+	console.log("PARSED startAt:", startAt.toString());
 
     const response = await fetch("/api/appointments", {
       method: "POST",
@@ -227,8 +229,8 @@ export default function PatientDashboard({ appointments, doctors }: PatientDashb
       body: JSON.stringify({
         patientId: user.id,
         doctorId: appointment.doctorId,
-        startAt: toISOWithOffset(startAt),
-        endAt: toISOWithOffset(endAt),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         type: appointment.type,
         reason: appointment.reason,
         notes: appointment.notes.trim() || undefined,

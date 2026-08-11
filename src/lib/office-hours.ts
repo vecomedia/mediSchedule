@@ -1,33 +1,33 @@
 export const OFFICE_START_HOUR = 7;
 export const OFFICE_END_HOUR = 17;
 export const OFFICE_SLOT_MINUTES = 15;
+export const OFFICE_TIMEZONE = "Europe/Berlin";
 
 function toMinutes(hour: number, minute: number) {
   return hour * 60 + minute;
 }
 
-/**
- * Converts a Date to ISO datetime string with timezone offset
- * Required by validation schemas that expect z.iso.datetime({ offset: true })
- * e.g., "2026-06-20T14:00:00+02:00"
- */
-export function toISOWithOffset(date: Date): string {
-  const offset = date.getTimezoneOffset();
-  const absOffset = Math.abs(offset);
-  const sign = offset <= 0 ? "+" : "-";
-  const offsetHours = String(Math.floor(absOffset / 60)).padStart(2, "0");
-  const offsetMinutes = String(absOffset % 60).padStart(2, "0");
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const second = String(date.getSeconds()).padStart(2, "0");
-  const millisecond = String(date.getMilliseconds()).padStart(3, "0");
-
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}.${millisecond}${sign}${offsetHours}:${offsetMinutes}`;
+function getTimeZoneOffsetMinutes(date: Date, timeZone: string): number {
+  const utcDate = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
+  const tzDate = new Date(date.toLocaleString("en-US", { timeZone }));
+  return (tzDate.getTime() - utcDate.getTime()) / 60000;
 }
+
+export function officeTimeToUtc(dateStr: string, timeStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const [hour, minute] = timeStr.split(":").map(Number);
+
+  // First guess, treating the wall-clock time as if it were UTC
+  const naiveUtc = new Date(Date.UTC(year, month - 1, day, hour, minute));
+
+  // Find out how far OFFICE_TIMEZONE actually is from UTC at that date (handles DST)
+  const offsetMinutes = getTimeZoneOffsetMinutes(naiveUtc, OFFICE_TIMEZONE);
+
+  // Correct it — this is the true UTC instant for "09:00 at the office"
+  return new Date(naiveUtc.getTime() - offsetMinutes * 60000);
+}
+
 
 export function buildOfficeTimeSlots() {
   const slotCount = ((OFFICE_END_HOUR - OFFICE_START_HOUR) * 60) / OFFICE_SLOT_MINUTES;
@@ -69,4 +69,24 @@ export function isWithinOfficeHours(startAt: Date, endAt: Date) {
   const officeEndMinutes = toMinutes(OFFICE_END_HOUR, 0);
 
   return startMinutes >= officeStartMinutes && endMinutes <= officeEndMinutes;
+}
+
+
+export function utcToOfficeParts(isoString: string): { date: string; time: string } {
+  const date = new Date(isoString);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: OFFICE_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${get("hour")}:${get("minute")}`,
+  };
 }

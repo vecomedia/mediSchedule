@@ -9,7 +9,7 @@ import StaffBookingDialog from "@/app/components/StaffBookingDialog";
 import { Button } from "@/app/components/ui/button";
 import type { AppointmentDetails, AppointmentStatus, Doctor, Patient } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { toISOWithOffset } from "@/lib/office-hours";
+
 
 import { AppointmentCard } from "./appointment-card";
 import { DayGrid } from "./day-grid";
@@ -291,8 +291,8 @@ export default function CalendarClient({
 		const endAt = new Date(startAt.getTime() + durationMs);
 		const requestPayload = {
 			mode: "reschedule",
-			startAt: toISOWithOffset(startAt),
-			endAt: toISOWithOffset(endAt),
+			startAt: startAt.toISOString(),
+			endAt: endAt.toISOString(),
 		};
 		logRescheduleDebug("Sending PATCH /api/appointments/:id", {
 			appointmentId,
