@@ -9,9 +9,18 @@ function toMinutes(hour: number, minute: number) {
 
 
 function getTimeZoneOffsetMinutes(date: Date, timeZone: string): number {
-  const utcDate = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
-  const tzDate = new Date(date.toLocaleString("en-US", { timeZone }));
-  return (tzDate.getTime() - utcDate.getTime()) / 60000;
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(date).map((p) => [p.type, p.value]));
+  const asUTC = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour), Number(parts.minute), Number(parts.second)
+  );
+  return (asUTC - date.getTime()) / 60000;
 }
 
 export function officeTimeToUtc(dateStr: string, timeStr: string): Date {
