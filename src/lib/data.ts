@@ -4,6 +4,8 @@ import type { Doctor as PrismaDoctor, PatientProfile, User } from "@prisma/clien
 import { appointments, doctors, patients } from "./faker-data";
 import { prisma } from "./prisma";
 import type { AppointmentDetails, AppointmentStatus, Doctor, Patient, PatientStatus } from "./types";
+import { officeTimeToUtc, utcToOfficeParts } from "./office-hours";
+
 
 // ---------------------------------------------------------------------------
 // Mappers: Prisma records → app domain types
@@ -46,34 +48,24 @@ function mapStatus(status: PrismaStatus): AppointmentStatus {
 	return status.toLowerCase() as AppointmentStatus;
 }
 
-function toLocalDateString(value: Date) {
-	const year = value.getFullYear();
-	const month = String(value.getMonth() + 1).padStart(2, "0");
-	const day = String(value.getDate()).padStart(2, "0");
-	return `${year}-${month}-${day}`;
-}
-
-function toLocalTimeString(value: Date) {
-	const hours = String(value.getHours()).padStart(2, "0");
-	const minutes = String(value.getMinutes()).padStart(2, "0");
-	return `${hours}:${minutes}`;
-}
 
 function mapAppointmentDetails(
-	apt: NonNullable<PrismaAppointmentWithRelations>,
+  apt: NonNullable<PrismaAppointmentWithRelations>,
 ): AppointmentDetails {
-	return {
-		id: apt.id,
-		patientId: apt.patientId,
-		doctorId: apt.doctorId,
-		date: toLocalDateString(apt.startAt),
-		time: toLocalTimeString(apt.startAt),
-		status: mapStatus(apt.status),
-		type: apt.type,
-		reason: apt.reason,
-		patient: mapPatient(apt.patient),
-		doctor: mapDoctor(apt.doctor),
-	};
+  const { date, time } = utcToOfficeParts(apt.startAt.toISOString());
+
+  return {
+    id: apt.id,
+    patientId: apt.patientId,
+    doctorId: apt.doctorId,
+    date,
+    time,
+    status: mapStatus(apt.status),
+    type: apt.type,
+    reason: apt.reason,
+    patient: mapPatient(apt.patient),
+    doctor: mapDoctor(apt.doctor),
+  };
 }
 
 function toPrismaStatus(status: AppointmentStatus): PrismaStatus {
@@ -290,8 +282,8 @@ export async function getAppointments(options?: {
 		const dateFilter =
 			options?.date
 				? {
-						gte: new Date(`${options.date}T00:00:00.000Z`),
-						lt: new Date(`${options.date}T23:59:59.999Z`),
+						gte: officeTimeToUtc(options.date, "00:00"),
+       					 lt: officeTimeToUtc(options.date, "23:59"),
 					}
 				: undefined;
 
@@ -368,37 +360,40 @@ export async function getAppointmentById(
 }
 
 export async function getDashboardStats(today: string) {
-	if (!(await shouldUsePrisma())) {
-		return getFallbackDashboardStats(today);
-	}
+    if (!(await shouldUsePrisma())) {
+        return getFallbackDashboardStats(today);
+    }
 
-	try {
-		const [totalPatients, todayAppointments, pendingAppointments, upcomingAppointments] =
-			await Promise.all([
-				prisma.patientProfile.count(),
-				prisma.appointment.count({
-					where: {
-						startAt: {
-							gte: new Date(`${today}T00:00:00.000Z`),
-							lt: new Date(`${today}T23:59:59.999Z`),
-						},
-					},
-				}),
-				prisma.appointment.count({
-					where: { status: PrismaStatus.PENDING },
-				}),
-				prisma.appointment.findMany({
-					where: {
-						startAt: { gte: new Date(`${today}T00:00:00.000Z`) },
-					},
-					include: {
-						patient: { include: { user: true } },
-						doctor: true,
-					},
-					orderBy: { startAt: "asc" },
-					take: 6,
-				}),
-			]);
+    try {
+        const todayStart = officeTimeToUtc(today, "00:00");
+        const todayEnd = officeTimeToUtc(today, "23:59");
+
+        const [totalPatients, todayAppointments, pendingAppointments, upcomingAppointments] =
+            await Promise.all([
+                prisma.patientProfile.count(),
+                prisma.appointment.count({
+                    where: {
+                        startAt: {
+                            gte: todayStart,
+                            lt: todayEnd,
+                        },
+                    },
+                }),
+                prisma.appointment.count({
+                    where: { status: PrismaStatus.PENDING },
+                }),
+                prisma.appointment.findMany({
+                    where: {
+                        startAt: { gte: todayStart },
+                    },
+                    include: {
+                        patient: { include: { user: true } },
+                        doctor: true,
+                    },
+                    orderBy: { startAt: "asc" },
+                    take: 6,
+                }),
+            ]);
 
 		return {
 			totalPatients,
