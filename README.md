@@ -2,7 +2,7 @@
 
 A multi-role healthcare scheduling app built as a learning project to practice Next.js App Router, server-first data fetching, role-based routing, and clean component architecture.
 
-Live architecture notes: [/case-study](http://localhost:3000/case-study)
+Live architecture notes: [/case-study](https://medi-schedule-dun.vercel.app/case-study)
 
 ---
 
